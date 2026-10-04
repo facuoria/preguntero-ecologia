@@ -49,4 +49,4 @@ vercel
 vercel --prod
 ```
 
-**URL de producción:** _(completar una vez desplegado)_
+**URL de producción:** https://preguntero-ecologia.vercel.app
