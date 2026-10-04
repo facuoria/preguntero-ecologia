@@ -1,5 +1,16 @@
-import { questions, TOTAL_GROUPS, type OptionKey, type Question } from '../data/questions';
-import { getLastGroup, setLastGroup } from './storage';
+import { questions, TOTAL_GROUPS, type OptionKey } from '../data/questions';
+import { questionsParcial, TOTAL_GROUPS_PARCIAL } from '../data/questions-parcial';
+import { getLastGroup, setLastGroup, type Mode } from './storage';
+
+interface BankQuestion {
+  id: number;
+  group: number;
+  prompt: string;
+  options: Record<OptionKey, string>;
+  correct: OptionKey;
+  section: string;
+  explanation?: string;
+}
 
 export interface ShuffledQuestion {
   id: number;
@@ -7,6 +18,7 @@ export interface ShuffledQuestion {
   options: { key: OptionKey; text: string }[];
   correctKey: OptionKey;
   section: string;
+  explanation?: string;
 }
 
 export interface ExamDetail {
@@ -22,6 +34,11 @@ export interface ExamResult {
   details: ExamDetail[];
 }
 
+const BANKS: Record<Mode, { questions: BankQuestion[]; groups: number }> = {
+  rapido: { questions, groups: TOTAL_GROUPS },
+  parcial: { questions: questionsParcial, groups: TOTAL_GROUPS_PARCIAL },
+};
+
 function shuffle<T>(items: T[]): T[] {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i--) {
@@ -31,19 +48,20 @@ function shuffle<T>(items: T[]): T[] {
   return result;
 }
 
-export function pickGroup(): number {
-  const last = getLastGroup();
+export function pickGroup(mode: Mode): number {
+  const { groups } = BANKS[mode];
+  const last = getLastGroup(mode);
   if (last === null) {
-    return Math.floor(Math.random() * TOTAL_GROUPS) + 1;
+    return Math.floor(Math.random() * groups) + 1;
   }
   let group: number;
   do {
-    group = Math.floor(Math.random() * TOTAL_GROUPS) + 1;
-  } while (group === last && TOTAL_GROUPS > 1);
+    group = Math.floor(Math.random() * groups) + 1;
+  } while (group === last && groups > 1);
   return group;
 }
 
-function shuffleQuestion(question: Question): ShuffledQuestion {
+function shuffleQuestion(question: BankQuestion): ShuffledQuestion {
   const optionKeys = Object.keys(question.options) as OptionKey[];
   const shuffledOptions = shuffle(optionKeys).map((key) => ({
     key,
@@ -55,12 +73,13 @@ function shuffleQuestion(question: Question): ShuffledQuestion {
     options: shuffledOptions,
     correctKey: question.correct,
     section: question.section,
+    explanation: question.explanation,
   };
 }
 
-export function buildExam(group: number): ShuffledQuestion[] {
-  setLastGroup(group);
-  const groupQuestions = questions.filter((q) => q.group === group);
+export function buildExam(mode: Mode, group: number): ShuffledQuestion[] {
+  setLastGroup(mode, group);
+  const groupQuestions = BANKS[mode].questions.filter((q) => q.group === group);
   return shuffle(groupQuestions).map(shuffleQuestion);
 }
 
@@ -75,27 +94,29 @@ export function grade(exam: ShuffledQuestion[], answers: Record<number, OptionKe
 }
 
 export function validateQuestionBank(): void {
-  if (import.meta.env.DEV) {
-    const errors: string[] = [];
-    if (questions.length !== 100) {
-      errors.push(`Se esperaban 100 preguntas, hay ${questions.length}`);
+  if (!import.meta.env.DEV) return;
+  const errors: string[] = [];
+  for (const [mode, bank] of Object.entries(BANKS) as [Mode, { questions: BankQuestion[]; groups: number }][]) {
+    const expectedTotal = bank.groups * 10;
+    if (bank.questions.length !== expectedTotal) {
+      errors.push(`[${mode}] Se esperaban ${expectedTotal} preguntas, hay ${bank.questions.length}`);
     }
     const ids = new Set<number>();
-    for (let g = 1; g <= TOTAL_GROUPS; g++) {
-      const groupQuestions = questions.filter((q) => q.group === g);
+    for (let g = 1; g <= bank.groups; g++) {
+      const groupQuestions = bank.questions.filter((q) => q.group === g);
       if (groupQuestions.length !== 10) {
-        errors.push(`El grupo ${g} tiene ${groupQuestions.length} preguntas (se esperaban 10)`);
+        errors.push(`[${mode}] El grupo ${g} tiene ${groupQuestions.length} preguntas (se esperaban 10)`);
       }
     }
-    for (const q of questions) {
-      if (ids.has(q.id)) errors.push(`Id duplicado: ${q.id}`);
+    for (const q of bank.questions) {
+      if (ids.has(q.id)) errors.push(`[${mode}] Id duplicado: ${q.id}`);
       ids.add(q.id);
       const optionKeys = Object.keys(q.options);
-      if (optionKeys.length !== 4) errors.push(`Pregunta ${q.id}: no tiene 4 opciones`);
-      if (!['A', 'B', 'C', 'D'].includes(q.correct)) errors.push(`Pregunta ${q.id}: correct inválido`);
+      if (optionKeys.length !== 4) errors.push(`[${mode}] Pregunta ${q.id}: no tiene 4 opciones`);
+      if (!['A', 'B', 'C', 'D'].includes(q.correct)) errors.push(`[${mode}] Pregunta ${q.id}: correct inválido`);
     }
-    if (errors.length > 0) {
-      console.error('Errores de validación en el banco de preguntas:', errors);
-    }
+  }
+  if (errors.length > 0) {
+    console.error('Errores de validación en el banco de preguntas:', errors);
   }
 }

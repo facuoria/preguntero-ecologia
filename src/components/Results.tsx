@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ExamResult } from '../lib/exam';
+import { renderBold } from '../lib/markdown';
 
 interface ResultsProps {
   result: ExamResult;
@@ -37,11 +38,14 @@ export default function Results({ result, onRetry, onHome }: ResultsProps) {
             const correctOption = detail.question.options.find((o) => o.key === detail.correct);
             return (
               <div className="card error-card" key={detail.question.id}>
-                <p className="error-prompt">{detail.question.prompt}</p>
+                <p className="error-prompt">{renderBold(detail.question.prompt)}</p>
                 <p className="answer-line wrong">
-                  Tu respuesta: {chosenOption ? chosenOption.text : '(sin responder)'}
+                  Tu respuesta: {chosenOption ? renderBold(chosenOption.text) : '(sin responder)'}
                 </p>
-                <p className="answer-line right">Correcta: {correctOption?.text}</p>
+                <p className="answer-line right">Correcta: {correctOption && renderBold(correctOption.text)}</p>
+                {detail.question.explanation && (
+                  <div className="explanation-box">{renderBold(detail.question.explanation)}</div>
+                )}
                 <p className="section-tag">📖 Dónde estudiarlo: {detail.question.section}</p>
               </div>
             );
@@ -58,9 +62,9 @@ export default function Results({ result, onRetry, onHome }: ResultsProps) {
             <div>
               {correct.map((detail) => (
                 <div className="card correct-card" key={detail.question.id}>
-                  <p className="error-prompt">{detail.question.prompt}</p>
+                  <p className="error-prompt">{renderBold(detail.question.prompt)}</p>
                   <p className="answer-line right">
-                    {detail.question.options.find((o) => o.key === detail.correct)?.text}
+                    {renderBold(detail.question.options.find((o) => o.key === detail.correct)?.text ?? '')}
                   </p>
                 </div>
               ))}
